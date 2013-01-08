@@ -51,8 +51,6 @@ namespace Pocioci.VS
             if (process.ExitCode != 0)
             {
                 string text = String.IsNullOrEmpty(error) ? output : error;
-
-                throw new Exception(text);
             }
 
             return new ExecutableResult

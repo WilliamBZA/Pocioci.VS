@@ -80,9 +80,11 @@ namespace Pocioci.VS
 
         #endregion
 
+        
+
         protected override byte[] GenerateCode(string inputFileName, string inputFileContent)
         {
-            Debug.WriteLine("+++++++++++++++++++++++++++++++++++++++++++");
+            Debug.WriteLine(string.Format("Generating code from {0}", inputFileName));
 
             var tempPath = System.IO.Path.GetTempPath();
             if (tempPath.EndsWith("\\"))
@@ -94,10 +96,31 @@ namespace Pocioci.VS
             pocioci.EnvironmentVariables["PATH"] = Environment.GetEnvironmentVariable("path");
             var result = pocioci.Execute("{0} {1} {2} {3}", "\"-o!targetCSAdoNet=1!CSAdoNetDir=" + tempPath + "\"", "\"" + inputFileName + "\"", "-C-", "-b" + tempPath);
 
-            var fileName = Path.GetFileName(inputFileName).Replace(Path.GetExtension(inputFileName), ".cs");
+            if (result.Output.StartsWith(inputFileName))
+            {
+                // Something went wrong
+                string lineNumberText = result.Output.Substring(inputFileName.Length + 1);
+                lineNumberText = lineNumberText.Substring(0, lineNumberText.IndexOf(")"));
+                int lineNumber = Convert.ToInt32(lineNumberText);
 
-            var filecontent = System.IO.File.ReadAllText(tempPath + "\\" + fileName);
-            return Encoding.UTF8.GetBytes(filecontent);
+                string error = result.Output.Substring(inputFileName.Length + 1);
+                error = error.Substring(error.IndexOf(":") + 2);
+
+                this.GeneratorErrorCallback(false, 0, error, lineNumber, 0);
+
+                return Encoding.UTF8.GetBytes(error);
+            }
+            else
+            {
+                Debug.WriteLine(string.Format("Execution result status: {0}", result.Error));
+
+                var fileName = Path.GetFileName(inputFileName).Replace(Path.GetExtension(inputFileName), ".cs");
+
+                var filecontent = System.IO.File.ReadAllText(tempPath + "\\" + fileName);
+
+                Debug.WriteLine("Code generation complete");
+                return Encoding.UTF8.GetBytes(filecontent);
+            }
         }
 
         public override string GetDefaultExtension()
