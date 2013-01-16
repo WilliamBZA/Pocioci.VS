@@ -8,12 +8,13 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using EnvDTE;
 
 namespace Pocioci.VS
 {
     [ComVisible(true)]
     [Guid("4B85C477-71D3-49C6-A3A3-D1BD0749BEAC")]
-    public class PociOciCustomTool : BaseCodeGeneratorWithSite
+    public class PociOciCustomTool : VsMultipleFileGenerator<string>
     {
         #region Registration
 
@@ -80,9 +81,7 @@ namespace Pocioci.VS
 
         #endregion
 
-        
-
-        protected override byte[] GenerateCode(string inputFileName, string inputFileContent)
+        protected byte[] GenerateCode(string inputFileName, string inputFileContent)
         {
             Debug.WriteLine(string.Format("Generating code from {0}", inputFileName));
 
@@ -106,8 +105,8 @@ namespace Pocioci.VS
                 string error = result.Output.Substring(inputFileName.Length + 1);
                 error = error.Substring(error.IndexOf(":") + 2);
 
-                this.GeneratorErrorCallback(false, 0, error, lineNumber, 0);
-
+                //this.GeneratorErrorCallback(false, 0, error, lineNumber, 0);
+                
                 return Encoding.UTF8.GetBytes(error);
             }
             else
@@ -125,7 +124,70 @@ namespace Pocioci.VS
 
         public override string GetDefaultExtension()
         { 
-            return ".generated.cs";
+            return ".cs";
+        }
+
+        public override IEnumerator<string> GetEnumerator()
+        {
+            var tempPath = System.IO.Path.GetTempPath();
+            if (tempPath.EndsWith("\\"))
+            {
+                tempPath = tempPath.Substring(0, tempPath.Length - 1);
+            }
+
+            var pocioci = new Executable("pocioci.exe", tempPath);
+            pocioci.EnvironmentVariables["PATH"] = Environment.GetEnvironmentVariable("path");
+            var result = pocioci.Execute("{0} {1} {2} {3} {4} {5}", "\"-o!targetCSAdoNet=1!CSAdoNetDir=" + tempPath + "\"", "\"" + InputFilePath + "\"", "-C-", "-b" + tempPath, "-9", "-s" + tempPath);
+
+            if (result.Output.StartsWith(InputFilePath))
+            {
+                // Something went wrong
+                string lineNumberText = result.Output.Substring(InputFilePath.Length + 1);
+                lineNumberText = lineNumberText.Substring(0, lineNumberText.IndexOf(")"));
+                var lineNumber = Convert.ToUInt32(lineNumberText);
+
+                string error = result.Output.Substring(InputFilePath.Length + 1);
+                error = error.Substring(error.IndexOf(":") + 2);
+
+                if (GenerateProgress != null)
+                {
+                    GenerateProgress.GeneratorError(0, 0, error, lineNumber, 0);
+                }
+            }
+            else
+            {
+                Debug.WriteLine(string.Format("Execution result status: {0}", result.Error));
+
+                var csFileName = Path.GetFileName(InputFilePath).Replace(Path.GetExtension(InputFilePath), ".cs");
+                var sqlFileName = Path.GetFileName(InputFilePath).Replace(Path.GetExtension(InputFilePath), ".sql");
+
+                Debug.WriteLine("Code generation complete");
+                yield return csFileName;
+                yield return sqlFileName;
+            }
+        }
+
+        protected override string GetFileName(string element)
+        {
+            return element.Substring(element.LastIndexOf('/') + 1);
+        }
+
+        public override byte[] GenerateContent(string element)
+        {
+            var tempPath = System.IO.Path.GetTempPath();
+            if (tempPath.EndsWith("\\"))
+            {
+                tempPath = tempPath.Substring(0, tempPath.Length - 1);
+            }
+
+            var filecontent = System.IO.File.ReadAllText(tempPath + "\\" + element);
+            return Encoding.UTF8.GetBytes(filecontent);
+        }
+
+        public override byte[] GenerateSummaryContent()
+        {
+            // Im not going to put anything in here...
+            return new byte[0];
         }
     }
 }
