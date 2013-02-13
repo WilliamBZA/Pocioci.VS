@@ -85,15 +85,21 @@ namespace Pocioci.VS
         {
             Debug.WriteLine(string.Format("Generating code from {0}", inputFileName));
 
+            // pocioci FILE -sSwitches.ini 
             var tempPath = System.IO.Path.GetTempPath();
             if (tempPath.EndsWith("\\"))
             {
                 tempPath = tempPath.Substring(0, tempPath.Length - 1);
             }
 
+            string switchFileName = tempPath + "\\" + inputFileName + "Switches.ini";
+             
+            // create Switches file
+            CreateSwitchesFile(switchFileName, inputFileName, tempPath);
+            
             var pocioci = new Executable("pocioci.exe", tempPath);
             pocioci.EnvironmentVariables["PATH"] = Environment.GetEnvironmentVariable("path");
-            var result = pocioci.Execute("{0} {1} {2} {3}", "\"-o!targetCSAdoNet=1!CSAdoNetDir=" + tempPath + "\"", "\"" + inputFileName + "\"", "-C-", "-b" + tempPath);
+            var result = pocioci.Execute("{0} {1}", inputFileName, switchFileName);
 
             if (result.Output.StartsWith(inputFileName))
             {
@@ -122,6 +128,25 @@ namespace Pocioci.VS
             }
         }
 
+        private void CreateSwitchesFile(string switchFileName, string inputFileName, string tempPath)
+        {
+            if (File.Exists(switchFileName))
+            {
+                File.Delete(switchFileName);
+            }
+
+            using (var streamWriter = new StreamWriter(File.Create(switchFileName)))
+            {
+                var switches = @"TargetCSAdoNet=1
+CSAdoNetDir=" + tempPath + @"\
+TargetSQL=1
+SqlDir=" + tempPath + @"\
+OneSQLScript=1
+LogDir=" + tempPath + @"\";
+                streamWriter.WriteLine(switches);
+            }
+        }
+
         public override string GetDefaultExtension()
         { 
             return ".cs";
@@ -135,9 +160,19 @@ namespace Pocioci.VS
                 tempPath = tempPath.Substring(0, tempPath.Length - 1);
             }
 
+            string switchFileName = tempPath + "\\" + Path.GetFileNameWithoutExtension(InputFilePath) + "Switches.ini";
+
+            // create Switches file
+            CreateSwitchesFile(switchFileName, InputFilePath, tempPath);
+
+
             var pocioci = new Executable("pocioci.exe", tempPath);
             pocioci.EnvironmentVariables["PATH"] = Environment.GetEnvironmentVariable("path");
-            var result = pocioci.Execute("{0} {1} {2} {3} {4} {5}", "\"-o!targetCSAdoNet=1!CSAdoNetDir=" + tempPath + "\"", "\"" + InputFilePath + "\"", "-C-", "-b" + tempPath, "-9", "-s" + tempPath);
+            var result = pocioci.Execute("{0} -s{1}", InputFilePath, switchFileName);
+
+            //var pocioci = new Executable("pocioci.exe", tempPath);
+            //pocioci.EnvironmentVariables["PATH"] = Environment.GetEnvironmentVariable("path");
+            //var result = pocioci.Execute("{0} {1} {2} {3} {4} {5}", "\"-o!targetCSAdoNet=1!CSAdoNetDir=" + tempPath + "\"", "\"" + InputFilePath + "\"", "-C-", "-b" + tempPath, "-9", "-s" + tempPath);
 
             if (result.Output.StartsWith(InputFilePath))
             {
